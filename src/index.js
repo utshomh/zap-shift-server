@@ -50,6 +50,12 @@ app.get("/", (_req, res) => {
   res.json({ message: "Welcome to Zap Shift API" });
 });
 
+app.post("/parcels", async (req, res) => {
+  const parcel = req.body;
+  const insertedParcel = await parcelsCollection.insertOne(parcel);
+  res.status(201).json(insertedParcel);
+});
+
 app.all(/.*/, (_req, res) => {
   res.status(404).json({
     message: "Route Not Found",
