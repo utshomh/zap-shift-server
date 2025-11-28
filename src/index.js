@@ -50,10 +50,40 @@ app.get("/", (_req, res) => {
   res.json({ message: "Welcome to Zap Shift API" });
 });
 
+app.get("/parcels", async (req, res) => {
+  try {
+    const allowedFields = ["email"];
+    const query = {};
+
+    for (const key of allowedFields) {
+      if (req.query[key]) {
+        query[key] = req.query[key];
+      }
+    }
+
+    // Sorting support
+    const sortField = req.query.sort || "createdAt";
+    const sortOrder = req.query.order === "asc" ? 1 : -1;
+
+    const parcels = await parcelsCollection
+      .find(query)
+      .sort({ [sortField]: sortOrder })
+      .toArray();
+
+    res.json(parcels);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/parcels", async (req, res) => {
-  const parcel = req.body;
-  const insertedParcel = await parcelsCollection.insertOne(parcel);
-  res.status(201).json(insertedParcel);
+  try {
+    const parcel = req.body;
+    const insertedParcel = await parcelsCollection.insertOne(parcel);
+    res.status(201).json(insertedParcel);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.all(/.*/, (_req, res) => {
