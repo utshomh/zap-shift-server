@@ -86,6 +86,22 @@ app.post("/parcels", async (req, res) => {
   }
 });
 
+app.delete("/parcels/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const filter = { _id: new ObjectId(id) };
+    const deletionResult = await parcelsCollection.deleteOne(filter);
+
+    if (deletionResult.deletedCount === 1) {
+      res.json(deletionResult);
+    } else {
+      res.status(404).json({ message: "Parcel Not Found" });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.all(/.*/, (_req, res) => {
   res.status(404).json({
     message: "Route Not Found",
