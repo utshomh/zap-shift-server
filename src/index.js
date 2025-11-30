@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import { MongoClient, ServerApiVersion, ObjectId } from "mongodb";
 import Stripe from "stripe";
 
+import { generateTrackingId } from "./utils.js";
+
 const app = express();
 
 // Middlewares
@@ -45,6 +47,7 @@ client
 
 const database = client.db("zap-shift");
 const parcelsCollection = database.collection("parcels");
+const paymentsCollection = database.collection("payments");
 
 const stripe = new Stripe(process.env.STRIPE_SECRET);
 
@@ -74,6 +77,7 @@ app.post("/payment-checkout", async (req, res) => {
       mode: "payment",
       metadata: {
         parcelId: parcel._id,
+        parcelName: parcel.parcelName,
       },
       customer_email: parcel.senderEmail,
       success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?sessionId={CHECKOUT_SESSION_ID}`,
@@ -91,19 +95,43 @@ app.patch("/verify-payment", async (req, res) => {
     const sessionId = req.query.sessionId;
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     const paid = session.payment_status === "paid";
+    const trackingId = generateTrackingId();
+
+    const payment = {
+      amount: session.amount_total / 100,
+      currency: session.currency,
+      customerEmail: session.customer_email,
+      parcelId: session.metadata.parcelId,
+      parcelName: session.metadata.parcelName,
+      paymentStatus: session.payment_status,
+      paidAt: new Date(),
+      transactionId: session.payment_intent,
+      trackingId,
+    };
+
+    const filter = { parcelId: session.metadata.parcelId };
+    const existingPayment = await paymentsCollection.findOne(filter);
+
+    if (existingPayment) {
+      return res.json(existingPayment);
+    }
 
     if (paid) {
       const filter = { _id: new ObjectId(session.metadata.parcelId) };
       const update = {
         $set: {
           paymentStatus: "paid",
+          trackingId,
         },
       };
-      const updatedParcel = await parcelsCollection.updateOne(filter, update);
-      res.json({ paid, ...updatedParcel });
-    } else {
-      res.json({ paid });
+      await parcelsCollection.updateOne(filter, update);
+      await paymentsCollection.insertOne({
+        ...payment,
+      });
+      return res.json(payment);
     }
+
+    res.json({ success: false });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -153,7 +181,10 @@ app.get("/parcels/:id", async (req, res) => {
 app.post("/parcels", async (req, res) => {
   try {
     const parcel = req.body;
-    const insertedParcel = await parcelsCollection.insertOne(parcel);
+    const insertedParcel = await parcelsCollection.insertOne({
+      ...parcel,
+      createdAt: new Date(),
+    });
     res.status(201).json(insertedParcel);
   } catch (err) {
     res.status(500).json({ error: err.message });
