@@ -57,15 +57,42 @@ app.get("/", (_req, res) => {
 });
 
 // Payment Routes
-app.post("/payment-checkout", async (req, res) => {
+app.get("/payments", async (req, res) => {
+  try {
+    const allowedFields = ["customerEmail"];
+    const query = {};
+
+    for (const key of allowedFields) {
+      if (req.query[key]) {
+        query[key] = req.query[key];
+      }
+    }
+
+    const sortField = req.query.sort || "createdAt";
+    const sortOrder = req.query.order === "asc" ? 1 : -1;
+
+    const payments = await paymentsCollection
+      .find(query)
+      .sort({ [sortField]: sortOrder })
+      .toArray();
+
+    res.json(payments);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/payments", async (req, res) => {
   try {
     const parcel = req.body;
-    const amount = parcel.charge * 100;
+    const bdtAmount = parcel.charge;
+    const usdAmount = Math.ceil(bdtAmount / 110);
+    const amount = usdAmount * 100;
     const session = await stripe.checkout.sessions.create({
       line_items: [
         {
           price_data: {
-            currency: "bdt",
+            currency: "usd",
             unit_amount: amount,
             product_data: {
               name: parcel.parcelName,
@@ -83,14 +110,14 @@ app.post("/payment-checkout", async (req, res) => {
       success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?sessionId={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
     });
-
+    console.log(session);
     res.json({ url: session.url });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.patch("/verify-payment", async (req, res) => {
+app.patch("/payments", async (req, res) => {
   try {
     const sessionId = req.query.sessionId;
     const session = await stripe.checkout.sessions.retrieve(sessionId);
