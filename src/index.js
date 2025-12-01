@@ -4,23 +4,12 @@ import dotenv from "dotenv";
 import { MongoClient, ServerApiVersion, ObjectId } from "mongodb";
 import Stripe from "stripe";
 
+import admin from "./admin.js";
 import { generateTrackingId } from "./utils.js";
 
+// Configs
 const app = express();
 
-// Middlewares
-app.use(cors());
-app.use(express.json());
-
-app.use(async (req, _res, next) => {
-  console.log(
-    `[⌛ ${new Date().toLocaleString()} (from ${req.host})]
-     ⚡ ${req.method} at ${req.path}`
-  );
-  next();
-});
-
-// Configs
 dotenv.config({ path: ".env" });
 dotenv.config({ path: ".env.local" });
 const port = process.env.PORT;
@@ -51,13 +40,42 @@ const paymentsCollection = database.collection("payments");
 
 const stripe = new Stripe(process.env.STRIPE_SECRET);
 
+// Middlewares
+const verifyFirebaseToken = async (req, res, next) => {
+  const { authorization } = req.headers;
+
+  if (!authorization) {
+    return res.status(401).json({ message: "Unauthorized Access" });
+  }
+
+  try {
+    const token = authorization.split(" ")[1];
+    const { email } = await admin.auth().verifyIdToken(token);
+    req.headers.email = email;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: "Unauthorized Access" });
+  }
+};
+
+app.use(cors());
+app.use(express.json());
+
+app.use(async (req, _res, next) => {
+  console.log(
+    `[⌛ ${new Date().toLocaleString()} (from ${req.host})]
+     ⚡ ${req.method} at ${req.path}`
+  );
+  next();
+});
+
 // General Routes
 app.get("/", (_req, res) => {
   res.json({ message: "Welcome to Zap Shift API" });
 });
 
 // Payment Routes
-app.get("/payments", async (req, res) => {
+app.get("/payments", verifyFirebaseToken, async (req, res) => {
   try {
     const allowedFields = ["customerEmail"];
     const query = {};
@@ -70,6 +88,10 @@ app.get("/payments", async (req, res) => {
 
     const sortField = req.query.sort || "createdAt";
     const sortOrder = req.query.order === "asc" ? 1 : -1;
+
+    if (!query.customerEmail !== req.headers.email) {
+      return res.status(403).json({ message: "Forbidden Access" });
+    }
 
     const payments = await paymentsCollection
       .find(query)
@@ -165,7 +187,7 @@ app.patch("/payments", async (req, res) => {
 });
 
 // Parcel Routes
-app.get("/parcels", async (req, res) => {
+app.get("/parcels", verifyFirebaseToken, async (req, res) => {
   try {
     const allowedFields = ["senderEmail"];
     const query = {};
@@ -178,6 +200,10 @@ app.get("/parcels", async (req, res) => {
 
     const sortField = req.query.sort || "createdAt";
     const sortOrder = req.query.order === "asc" ? 1 : -1;
+
+    if (query.senderEmail !== req.headers.email) {
+      return res.status(403).json({ message: "Forbidden Access" });
+    }
 
     const parcels = await parcelsCollection
       .find(query)
