@@ -35,6 +35,7 @@ client
   });
 
 const database = client.db("zap-shift");
+const usersCollection = database.collection("users");
 const parcelsCollection = database.collection("parcels");
 const paymentsCollection = database.collection("payments");
 
@@ -72,6 +73,22 @@ app.use(async (req, _res, next) => {
 // General Routes
 app.get("/", (_req, res) => {
   res.json({ message: "Welcome to Zap Shift API" });
+});
+
+// User Routes
+app.post("/users", async (req, res) => {
+  try {
+    const user = { ...req.body, role: "user", createdAt: new Date() };
+    const existingUser = await usersCollection.findOne({ email: user.email });
+    if (!existingUser) {
+      const createdUser = await usersCollection.insertOne(user);
+      res.status(201).json(createdUser);
+    } else {
+      res.status(200).send();
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Payment Routes
