@@ -89,7 +89,7 @@ app.get("/payments", verifyFirebaseToken, async (req, res) => {
     const sortField = req.query.sort || "createdAt";
     const sortOrder = req.query.order === "asc" ? 1 : -1;
 
-    if (!query.customerEmail !== req.headers.email) {
+    if (query.customerEmail !== req.headers.email) {
       return res.status(403).json({ message: "Forbidden Access" });
     }
 
