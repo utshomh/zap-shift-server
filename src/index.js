@@ -136,20 +136,31 @@ app.post("/riders", async (req, res) => {
   }
 });
 
-app.patch("/riders/:id", async (req, res) => {
+app.patch("/riders/:id", verifyFirebaseToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const fieldToUpdate = req.body;
+    const update = { $set: { ...req.body } };
     const filter = { _id: new ObjectId(id) };
-    const update = { $set: { ...fieldToUpdate } };
+
+    const rider = await ridersCollection.findOne(filter);
     const updatedRider = await ridersCollection.updateOne(filter, update);
 
-    if (updatedRider.modifiedCount === 1) {
-      res.json(updatedRider);
-    } else {
-      res.status(404).json({ message: "Parcel Not Found" });
+    if (updatedRider.modifiedCount === 0) {
+      return res.status(404).json({ message: "Rider not found" });
     }
+
+    if (req.body.status === "approved") {
+      const riderEmail = rider.email;
+      const updatedUser = await usersCollection.updateOne(
+        { email: riderEmail },
+        { $set: { role: "rider" } }
+      );
+    }
+
+    res.json(updatedRider.value);
   } catch (err) {
+    console.error(err);
+
     res.status(500).json({ error: err.message });
   }
 });
