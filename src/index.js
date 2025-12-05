@@ -93,6 +93,30 @@ app.post("/users", async (req, res) => {
 });
 
 // Rider Routes
+app.get("/riders", verifyFirebaseToken, async (req, res) => {
+  try {
+    const allowedFields = ["status"];
+    const query = {};
+
+    for (const key of allowedFields) {
+      if (req.query[key]) {
+        query[key] = req.query[key];
+      }
+    }
+
+    const sortField = req.query.sort || "createdAt";
+    const sortOrder = req.query.order === "asc" ? 1 : -1;
+
+    const riders = await ridersCollection
+      .find(query)
+      .sort({ [sortField]: sortOrder })
+      .toArray();
+    res.json(riders);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/riders", async (req, res) => {
   try {
     const rider = { ...req.body, status: "pending", createdAt: new Date() };
@@ -106,6 +130,40 @@ app.post("/riders", async (req, res) => {
     } else {
       const createdRider = await ridersCollection.insertOne(rider);
       res.status(201).json(createdRider);
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch("/riders/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const fieldToUpdate = req.body;
+    const filter = { _id: new ObjectId(id) };
+    const update = { $set: { ...fieldToUpdate } };
+    const updatedRider = await ridersCollection.updateOne(filter, update);
+
+    if (updatedRider.modifiedCount === 1) {
+      res.json(updatedRider);
+    } else {
+      res.status(404).json({ message: "Parcel Not Found" });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/riders/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const filter = { _id: new ObjectId(id) };
+    const deletionResult = await ridersCollection.deleteOne(filter);
+
+    if (deletionResult.deletedCount === 1) {
+      res.json(deletionResult);
+    } else {
+      res.status(404).json({ message: "Parcel Not Found" });
     }
   } catch (err) {
     res.status(500).json({ error: err.message });
