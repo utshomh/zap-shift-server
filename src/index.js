@@ -77,6 +77,30 @@ app.get("/", (_req, res) => {
 });
 
 // User Routes
+app.get("/users", verifyFirebaseToken, async (req, res) => {
+  try {
+    const allowedFields = ["role"];
+    const query = {};
+
+    for (const key of allowedFields) {
+      if (req.query[key]) {
+        query[key] = req.query[key];
+      }
+    }
+
+    const sortField = req.query.sort || "createdAt";
+    const sortOrder = req.query.order === "asc" ? 1 : -1;
+
+    const users = await usersCollection
+      .find(query)
+      .sort({ [sortField]: sortOrder })
+      .toArray();
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/users", async (req, res) => {
   try {
     const user = { ...req.body, role: "user", createdAt: new Date() };
@@ -88,6 +112,28 @@ app.post("/users", async (req, res) => {
       res.status(200).send();
     }
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch("/users/:id", verifyFirebaseToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const update = { $set: { ...req.body } };
+    const filter = { _id: new ObjectId(id) };
+
+    console.log(update);
+
+    const updatedUser = await usersCollection.updateOne(filter, update);
+
+    if (updatedUser.modifiedCount === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json(updatedUser);
+  } catch (err) {
+    console.error(err);
+
     res.status(500).json({ error: err.message });
   }
 });
@@ -151,7 +197,7 @@ app.patch("/riders/:id", verifyFirebaseToken, async (req, res) => {
 
     if (req.body.status === "approved") {
       const riderEmail = rider.email;
-      const updatedUser = await usersCollection.updateOne(
+      await usersCollection.updateOne(
         { email: riderEmail },
         { $set: { role: "rider" } }
       );
