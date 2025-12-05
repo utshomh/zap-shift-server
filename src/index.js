@@ -36,6 +36,7 @@ client
 
 const database = client.db("zap-shift");
 const usersCollection = database.collection("users");
+const ridersCollection = database.collection("riders");
 const parcelsCollection = database.collection("parcels");
 const paymentsCollection = database.collection("payments");
 
@@ -85,6 +86,26 @@ app.post("/users", async (req, res) => {
       res.status(201).json(createdUser);
     } else {
       res.status(200).send();
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Rider Routes
+app.post("/riders", async (req, res) => {
+  try {
+    const rider = { ...req.body, status: "pending", createdAt: new Date() };
+    const existingRider = await ridersCollection.findOne({
+      email: rider.email,
+    });
+    if (existingRider) {
+      res.status(409).json({
+        message: "A rider with this email already exists",
+      });
+    } else {
+      const createdRider = await ridersCollection.insertOne(rider);
+      res.status(201).json(createdRider);
     }
   } catch (err) {
     res.status(500).json({ error: err.message });
